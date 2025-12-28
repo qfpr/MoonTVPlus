@@ -97,6 +97,9 @@ export const UserMenu: React.FC = () => {
   const [isDoubanDropdownOpen, setIsDoubanDropdownOpen] = useState(false);
   const [isDoubanImageProxyDropdownOpen, setIsDoubanImageProxyDropdownOpen] =
     useState(false);
+  const [bufferStrategy, setBufferStrategy] = useState('medium');
+  const [nextEpisodePreCache, setNextEpisodePreCache] = useState(true);
+  const [isBufferStrategyDropdownOpen, setIsBufferStrategyDropdownOpen] = useState(false);
 
   // 豆瓣数据源选项
   const doubanDataSourceOptions = [
@@ -121,6 +124,14 @@ export const UserMenu: React.FC = () => {
     },
     { value: 'cmliussss-cdn-ali', label: '豆瓣 CDN By CMLiussss（阿里云）' },
     { value: 'custom', label: '自定义代理' },
+  ];
+
+  // 缓冲策略选项
+  const bufferStrategyOptions = [
+    { value: 'low', label: '低缓冲（省流量）' },
+    { value: 'medium', label: '中缓冲（推荐）' },
+    { value: 'high', label: '高缓冲（流畅播放）' },
+    { value: 'ultra', label: '超高缓冲（极速体验）' },
   ];
 
   // 修改密码相关状态
@@ -315,6 +326,16 @@ export const UserMenu: React.FC = () => {
       if (savedTmdbBackdropDisabled !== null) {
         setTmdbBackdropDisabled(savedTmdbBackdropDisabled === 'true');
       }
+
+      const savedBufferStrategy = localStorage.getItem('bufferStrategy');
+      if (savedBufferStrategy !== null) {
+        setBufferStrategy(savedBufferStrategy);
+      }
+
+      const savedNextEpisodePreCache = localStorage.getItem('nextEpisodePreCache');
+      if (savedNextEpisodePreCache !== null) {
+        setNextEpisodePreCache(savedNextEpisodePreCache === 'true');
+      }
     }
   }, []);
 
@@ -352,6 +373,23 @@ export const UserMenu: React.FC = () => {
         document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [isDoubanImageProxyDropdownOpen]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isBufferStrategyDropdownOpen) {
+        const target = event.target as Element;
+        if (!target.closest('[data-dropdown="buffer-strategy"]')) {
+          setIsBufferStrategyDropdownOpen(false);
+        }
+      }
+    };
+
+    if (isBufferStrategyDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () =>
+        document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isBufferStrategyDropdownOpen]);
 
   const handleMenuClick = () => {
     setIsOpen(!isOpen);
@@ -547,6 +585,20 @@ export const UserMenu: React.FC = () => {
     }
   };
 
+  const handleBufferStrategyChange = (value: string) => {
+    setBufferStrategy(value);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('bufferStrategy', value);
+    }
+  };
+
+  const handleNextEpisodePreCacheToggle = (value: boolean) => {
+    setNextEpisodePreCache(value);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nextEpisodePreCache', String(value));
+    }
+  };
+
   // 获取感谢信息
   const getThanksInfo = (dataSource: string) => {
     switch (dataSource) {
@@ -587,6 +639,8 @@ export const UserMenu: React.FC = () => {
     setDoubanDataSource(defaultDoubanProxyType);
     setDoubanImageProxyType(defaultDoubanImageProxyType);
     setDoubanImageProxyUrl(defaultDoubanImageProxyUrl);
+    setBufferStrategy('medium');
+    setNextEpisodePreCache(true);
 
     if (typeof window !== 'undefined') {
       localStorage.setItem('defaultAggregateSearch', JSON.stringify(true));
@@ -598,6 +652,8 @@ export const UserMenu: React.FC = () => {
       localStorage.setItem('doubanDataSource', defaultDoubanProxyType);
       localStorage.setItem('doubanImageProxyType', defaultDoubanImageProxyType);
       localStorage.setItem('doubanImageProxyUrl', defaultDoubanImageProxyUrl);
+      localStorage.setItem('bufferStrategy', 'medium');
+      localStorage.setItem('nextEpisodePreCache', 'true');
     }
   };
 
@@ -1239,6 +1295,104 @@ export const UserMenu: React.FC = () => {
                   <div className='absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-5'></div>
                 </div>
               </label>
+            </div>
+
+            {/* 分割线 */}
+            <div className='border-t border-gray-200 dark:border-gray-700'></div>
+
+            {/* 缓冲设置 */}
+            <div className='space-y-4'>
+              <div>
+                <h4 className='text-base font-semibold text-gray-800 dark:text-gray-200'>
+                  缓冲设置
+                </h4>
+                <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+                  调整播放器缓冲策略（仅在播放页面生效）
+                </p>
+              </div>
+
+              {/* 缓冲策略 */}
+              <div className='space-y-3'>
+                <div>
+                  <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>
+                    缓冲策略
+                  </h4>
+                  <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+                    设置视频缓冲块大小，影响播放流畅度和流量消耗
+                  </p>
+                </div>
+                <div className='relative' data-dropdown='buffer-strategy'>
+                  {/* 自定义下拉选择框 */}
+                  <button
+                    type='button'
+                    onClick={() => setIsBufferStrategyDropdownOpen(!isBufferStrategyDropdownOpen)}
+                    className='w-full px-3 py-2.5 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm hover:border-gray-400 dark:hover:border-gray-500 text-left'
+                  >
+                    {
+                      bufferStrategyOptions.find(
+                        (option) => option.value === bufferStrategy
+                      )?.label
+                    }
+                  </button>
+
+                  {/* 下拉箭头 */}
+                  <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
+                    <ChevronDown
+                      className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${isBufferStrategyDropdownOpen ? 'rotate-180' : ''
+                        }`}
+                    />
+                  </div>
+
+                  {/* 下拉选项列表 */}
+                  {isBufferStrategyDropdownOpen && (
+                    <div className='absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-auto'>
+                      {bufferStrategyOptions.map((option) => (
+                        <button
+                          key={option.value}
+                          type='button'
+                          onClick={() => {
+                            handleBufferStrategyChange(option.value);
+                            setIsBufferStrategyDropdownOpen(false);
+                          }}
+                          className={`w-full px-3 py-2.5 text-left text-sm transition-colors duration-150 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 ${bufferStrategy === option.value
+                            ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+                            : 'text-gray-900 dark:text-gray-100'
+                            }`}
+                        >
+                          <span className='truncate'>{option.label}</span>
+                          {bufferStrategy === option.value && (
+                            <Check className='w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 ml-2' />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 下集预缓冲 */}
+              <div className='flex items-center justify-between'>
+                <div>
+                  <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>
+                    下集预缓冲
+                  </h4>
+                  <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+                    播放进度达到90%时，自动预缓冲下一集内容
+                  </p>
+                </div>
+                <label className='flex items-center cursor-pointer'>
+                  <div className='relative'>
+                    <input
+                      type='checkbox'
+                      className='sr-only peer'
+                      checked={nextEpisodePreCache}
+                      onChange={(e) => handleNextEpisodePreCacheToggle(e.target.checked)}
+                    />
+                    <div className='w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-green-500 transition-colors dark:bg-gray-600'></div>
+                    <div className='absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-5'></div>
+                  </div>
+                </label>
+              </div>
             </div>
 
             {/* 分割线 */}

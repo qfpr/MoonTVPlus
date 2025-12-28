@@ -476,6 +476,20 @@ function PlayPageClient() {
     videoYear,
   ]);
 
+  // 当集数改变时，重置下集预缓存标记
+  useEffect(() => {
+    nextEpisodePreCacheTriggeredRef.current = false;
+    // 清理之前的预缓存 HLS 实例
+    if (nextEpisodePreCacheHlsRef.current) {
+      try {
+        nextEpisodePreCacheHlsRef.current.destroy();
+      } catch (e) {
+        console.error('清理预缓存 HLS 实例失败:', e);
+      }
+      nextEpisodePreCacheHlsRef.current = null;
+    }
+  }, [currentEpisodeIndex]);
+
   // 监听剧集切换，自动加载对应的弹幕
   const lastLoadedEpisodeIdRef = useRef<number | null>(null);
 
@@ -741,6 +755,10 @@ function PlayPageClient() {
   // 播放进度保存相关
   const saveIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveTimeRef = useRef<number>(0);
+
+  // 下集预缓存相关
+  const nextEpisodePreCacheTriggeredRef = useRef<boolean>(false);
+  const nextEpisodePreCacheHlsRef = useRef<any>(null);
 
   const artPlayerRef = useRef<any>(null);
   const artRef = useRef<HTMLDivElement | null>(null);
@@ -3260,15 +3278,58 @@ function PlayPageClient() {
             // 每次创建HLS实例时，都读取最新的blockAdEnabled状态
             const shouldUseCustomLoader = blockAdEnabledRef.current;
 
+            // 从localStorage读取缓冲策略
+            const bufferStrategy = typeof window !== 'undefined'
+              ? localStorage.getItem('bufferStrategy') || 'medium'
+              : 'medium';
+
+            // 根据缓冲策略配置不同的缓冲参数
+            const getBufferConfig = (strategy: string) => {
+              switch (strategy) {
+                case 'low':
+                  return {
+                    maxBufferLength: 15,
+                    backBufferLength: 15,
+                    maxBufferSize: 30 * 1000 * 1000, // ~30MB
+                  };
+                case 'medium':
+                  return {
+                    maxBufferLength: 30,
+                    backBufferLength: 30,
+                    maxBufferSize: 60 * 1000 * 1000, // ~60MB
+                  };
+                case 'high':
+                  return {
+                    maxBufferLength: 60,
+                    backBufferLength: 40,
+                    maxBufferSize: 120 * 1000 * 1000, // ~120MB
+                  };
+                case 'ultra':
+                  return {
+                    maxBufferLength: 120,
+                    backBufferLength: 60,
+                    maxBufferSize: 240 * 1000 * 1000, // ~240MB
+                  };
+                default:
+                  return {
+                    maxBufferLength: 30,
+                    backBufferLength: 30,
+                    maxBufferSize: 60 * 1000 * 1000,
+                  };
+              }
+            };
+
+            const bufferConfig = getBufferConfig(bufferStrategy);
+
             const hls = new Hls({
               debug: false, // 关闭日志
               enableWorker: true, // WebWorker 解码，降低主线程压力
               lowLatencyMode: true, // 开启低延迟 LL-HLS
 
-              /* 缓冲/内存相关 */
-              maxBufferLength: 30, // 前向缓冲最大 30s，过大容易导致高延迟
-              backBufferLength: 30, // 仅保留 30s 已播放内容，避免内存占用
-              maxBufferSize: 60 * 1000 * 1000, // 约 60MB，超出后触发清理
+              /* 缓冲/内存相关 - 根据用户设置的缓冲策略动态调整 */
+              maxBufferLength: bufferConfig.maxBufferLength, // 前向缓冲长度
+              backBufferLength: bufferConfig.backBufferLength, // 已播放内容保留长度
+              maxBufferSize: bufferConfig.maxBufferSize, // 最大缓冲大小
 
               /* 自定义loader */
               loader: (shouldUseCustomLoader
@@ -4326,6 +4387,84 @@ function PlayPageClient() {
         if (now - lastSaveTimeRef.current > interval) {
           saveCurrentPlayProgress();
           lastSaveTimeRef.current = now;
+        }
+
+        // 下集预缓冲逻辑
+        const nextEpisodePreCacheEnabled = typeof window !== 'undefined'
+          ? localStorage.getItem('nextEpisodePreCache') === 'true'
+          : false;
+
+        if (nextEpisodePreCacheEnabled) {
+          const currentTime = artPlayerRef.current?.currentTime || 0;
+          const duration = artPlayerRef.current?.duration || 0;
+          const progress = duration > 0 ? currentTime / duration : 0;
+
+          // 检查是否已经到达90%播放进度
+          if (duration > 0 && progress >= 0.9 && !nextEpisodePreCacheTriggeredRef.current) {
+            // 标记已触发，防止重复执行
+            nextEpisodePreCacheTriggeredRef.current = true;
+
+            // 获取下一集信息
+            const currentIdx = currentEpisodeIndexRef.current;
+            const episodes = detailRef.current?.episodes;
+
+            if (!episodes || currentIdx >= episodes.length - 1) {
+              return;
+            }
+
+            const nextEpisodeIndex = currentIdx + 1;
+            const nextEpisodeUrl = episodes[nextEpisodeIndex];
+
+            if (!nextEpisodeUrl) {
+              return;
+            }
+
+            // 使用 fetch 预加载资源，利用浏览器缓存
+            const preloadNextEpisode = async () => {
+              try {
+                // 判断是否是m3u8流
+                if (nextEpisodeUrl.includes('.m3u8') || nextEpisodeUrl.includes('m3u8')) {
+                  // 1. 先fetch m3u8文件
+                  const m3u8Response = await fetch(nextEpisodeUrl);
+                  const m3u8Text = await m3u8Response.text();
+
+                  // 2. 解析m3u8，提取ts分片URL
+                  const lines = m3u8Text.split('\n');
+                  const tsUrls: string[] = [];
+                  const baseUrl = nextEpisodeUrl.substring(0, nextEpisodeUrl.lastIndexOf('/') + 1);
+
+                  for (const line of lines) {
+                    const trimmedLine = line.trim();
+                    // 跳过注释和空行
+                    if (!trimmedLine || trimmedLine.startsWith('#')) {
+                      continue;
+                    }
+                    // 构建完整的ts URL
+                    const tsUrl = trimmedLine.startsWith('http')
+                      ? trimmedLine
+                      : baseUrl + trimmedLine;
+                    tsUrls.push(tsUrl);
+                  }
+
+                  // 3. 预加载前20个ts分片
+                  const maxFragmentsToPreload = Math.min(20, tsUrls.length);
+
+                  for (let i = 0; i < maxFragmentsToPreload; i++) {
+                    try {
+                      await fetch(tsUrls[i]);
+                    } catch (err) {
+                      // 静默处理分片加载失败
+                    }
+                  }
+                }
+              } catch (error) {
+                // 静默处理预缓冲失败
+              }
+            };
+
+            // 异步执行预缓冲
+            preloadNextEpisode();
+          }
         }
       });
 
