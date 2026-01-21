@@ -367,6 +367,7 @@ function PlayPageClient() {
   >([]);
   const [danmakuLoading, setDanmakuLoading] = useState(false);
   const [danmakuCount, setDanmakuCount] = useState(0);
+  const [danmakuOriginalCount, setDanmakuOriginalCount] = useState(0);
   const danmakuPluginRef = useRef<any>(null);
   const danmakuSettingsRef = useRef(danmakuSettings);
 
@@ -703,6 +704,22 @@ function PlayPageClient() {
             if (filteredCount > 0) {
               console.log(`弹幕过滤: 原始 ${originalCount} 条，过滤 ${filteredCount} 条，剩余 ${danmakuData.length} 条`);
             }
+          }
+
+          // 应用弹幕数量限制
+          const maxCount = typeof window !== 'undefined' ? parseInt(localStorage.getItem('danmakuMaxCount') || '0', 10) : 0;
+          if (maxCount > 0 && danmakuData.length > maxCount) {
+            const originalCount = danmakuData.length;
+            const step = danmakuData.length / maxCount;
+            const limitedData = [];
+            for (let i = 0; i < maxCount; i++) {
+              limitedData.push(danmakuData[Math.floor(i * step)]);
+            }
+            danmakuData = limitedData;
+            setDanmakuOriginalCount(originalCount);
+            console.log(`弹幕数量限制: 原始 ${originalCount} 条，限制到 ${danmakuData.length} 条`);
+          } else {
+            setDanmakuOriginalCount(0);
           }
 
           // 加载弹幕到插件
@@ -3602,6 +3619,22 @@ function PlayPageClient() {
         }
       }
 
+      // 应用弹幕数量限制
+      const maxCount = typeof window !== 'undefined' ? parseInt(localStorage.getItem('danmakuMaxCount') || '0', 10) : 0;
+      if (maxCount > 0 && danmakuData.length > maxCount) {
+        const originalCount = danmakuData.length;
+        const step = danmakuData.length / maxCount;
+        const limitedData = [];
+        for (let i = 0; i < maxCount; i++) {
+          limitedData.push(danmakuData[Math.floor(i * step)]);
+        }
+        danmakuData = limitedData;
+        setDanmakuOriginalCount(originalCount);
+        console.log(`弹幕数量限制: 原始 ${originalCount} 条，限制到 ${danmakuData.length} 条`);
+      } else {
+        setDanmakuOriginalCount(0);
+      }
+
       // 加载弹幕到插件，同时应用当前的弹幕设置
       const currentSettings = danmakuSettingsRef.current;
       danmakuPluginRef.current.config({
@@ -3634,6 +3667,7 @@ function PlayPageClient() {
           episodeTitle: metadata.episodeTitle || '',
           searchKeyword: metadata.searchKeyword,
           danmakuCount: danmakuData.length,
+          danmakuOriginalCount: danmakuOriginalCount > 0 ? danmakuOriginalCount : undefined,
         });
       }
 
@@ -3799,6 +3833,22 @@ function PlayPageClient() {
           }
           return true;
         });
+      }
+
+      // 应用弹幕数量限制
+      const maxCount = typeof window !== 'undefined' ? parseInt(localStorage.getItem('danmakuMaxCount') || '0', 10) : 0;
+      if (maxCount > 0 && danmakuData.length > maxCount) {
+        const originalCount = danmakuData.length;
+        const step = danmakuData.length / maxCount;
+        const limitedData = [];
+        for (let i = 0; i < maxCount; i++) {
+          limitedData.push(danmakuData[Math.floor(i * step)]);
+        }
+        danmakuData = limitedData;
+        setDanmakuOriginalCount(originalCount);
+        console.log(`弹幕数量限制: 原始 ${originalCount} 条，限制到 ${danmakuData.length} 条`);
+      } else {
+        setDanmakuOriginalCount(0);
       }
 
       // 加载弹幕到播放器（使用 reset 方法清空，不触发显示/隐藏事件）
@@ -4048,6 +4098,22 @@ function PlayPageClient() {
           if (filteredCount > 0) {
             console.log(`弹幕过滤: 原始 ${originalCount} 条，过滤 ${filteredCount} 条，剩余 ${danmakuData.length} 条`);
           }
+        }
+
+        // 应用弹幕数量限制
+        const maxCount = typeof window !== 'undefined' ? parseInt(localStorage.getItem('danmakuMaxCount') || '0', 10) : 0;
+        if (maxCount > 0 && danmakuData.length > maxCount) {
+          const originalCount = danmakuData.length;
+          const step = danmakuData.length / maxCount;
+          const limitedData = [];
+          for (let i = 0; i < maxCount; i++) {
+            limitedData.push(danmakuData[Math.floor(i * step)]);
+          }
+          danmakuData = limitedData;
+          setDanmakuOriginalCount(originalCount);
+          console.log(`弹幕数量限制: 原始 ${originalCount} 条，限制到 ${danmakuData.length} 条`);
+        } else {
+          setDanmakuOriginalCount(0);
         }
 
         // 加载弹幕到插件
@@ -7107,7 +7173,10 @@ function PlayPageClient() {
                           />
                         </svg>
                         <span className='text-sm font-medium text-green-400'>
-                          已加载 {danmakuCount} 条弹幕
+                          {danmakuOriginalCount > 0
+                            ? `已加载 ${danmakuCount} 条弹幕（原始 ${danmakuOriginalCount} 条）`
+                            : `已加载 ${danmakuCount} 条弹幕`
+                          }
                         </span>
                       </>
                     ) : (

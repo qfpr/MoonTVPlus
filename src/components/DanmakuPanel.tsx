@@ -241,6 +241,7 @@ export default function DanmakuPanel({
             {currentSelection.danmakuCount !== undefined && (
               <p className='mt-1 text-xs text-gray-500 dark:text-gray-500'>
                 弹幕数量: {currentSelection.danmakuCount}
+                {currentSelection.danmakuOriginalCount && ` (原始 ${currentSelection.danmakuOriginalCount} 条)`}
               </p>
             )}
           </div>

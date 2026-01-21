@@ -114,6 +114,7 @@ export const UserMenu: React.FC = () => {
   const [nextEpisodePreCache, setNextEpisodePreCache] = useState(true);
   const [nextEpisodeDanmakuPreload, setNextEpisodeDanmakuPreload] = useState(true);
   const [disableAutoLoadDanmaku, setDisableAutoLoadDanmaku] = useState(false);
+  const [danmakuMaxCount, setDanmakuMaxCount] = useState(0);
   const [searchTraditionalToSimplified, setSearchTraditionalToSimplified] = useState(false);
 
   // 邮件通知设置
@@ -407,6 +408,19 @@ export const UserMenu: React.FC = () => {
       const savedDisableAutoLoadDanmaku = localStorage.getItem('disableAutoLoadDanmaku');
       if (savedDisableAutoLoadDanmaku !== null) {
         setDisableAutoLoadDanmaku(savedDisableAutoLoadDanmaku === 'true');
+      }
+
+      const savedDanmakuMaxCount = localStorage.getItem('danmakuMaxCount');
+      if (savedDanmakuMaxCount !== null) {
+        const value = parseInt(savedDanmakuMaxCount, 10);
+        // 兼容旧版本的0-4映射值
+        if (value <= 4) {
+          const mappedValue = value === 0 ? 0 : value === 1 ? 1000 : value === 2 ? 3000 : value === 3 ? 5000 : 10000;
+          setDanmakuMaxCount(mappedValue);
+          localStorage.setItem('danmakuMaxCount', String(mappedValue));
+        } else {
+          setDanmakuMaxCount(value);
+        }
       }
 
       // 加载首页模块配置
@@ -772,6 +786,13 @@ export const UserMenu: React.FC = () => {
     }
   };
 
+  const handleDanmakuMaxCountChange = (value: number) => {
+    setDanmakuMaxCount(value);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('danmakuMaxCount', String(value));
+    }
+  };
+
   const handleSearchTraditionalToSimplifiedToggle = (value: boolean) => {
     setSearchTraditionalToSimplified(value);
     if (typeof window !== 'undefined') {
@@ -891,6 +912,7 @@ export const UserMenu: React.FC = () => {
       localStorage.setItem('nextEpisodePreCache', 'true');
       localStorage.setItem('nextEpisodeDanmakuPreload', 'true');
       localStorage.setItem('disableAutoLoadDanmaku', 'false');
+      localStorage.setItem('danmakuMaxCount', '0');
       localStorage.setItem('homeModules', JSON.stringify(defaultHomeModules));
       localStorage.setItem('searchTraditionalToSimplified', 'false');
       window.dispatchEvent(new CustomEvent('homeModulesUpdated'));
@@ -1877,6 +1899,65 @@ export const UserMenu: React.FC = () => {
                         <div className='absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-5'></div>
                       </div>
                     </label>
+                  </div>
+
+                  {/* 弹幕加载上限 */}
+                  <div className='space-y-2'>
+                    <div className='flex items-center justify-between'>
+                      <span className='text-xs text-gray-600 dark:text-gray-400'>
+                        弹幕加载上限
+                      </span>
+                      <span className='text-xs font-medium text-gray-700 dark:text-gray-300'>
+                        {danmakuMaxCount === 0 ? '无上限' : `${danmakuMaxCount} 条`}
+                      </span>
+                    </div>
+                    <div className='flex items-center gap-2'>
+                      <input
+                        type='range'
+                        min='0'
+                        max='10000'
+                        step='100'
+                        value={danmakuMaxCount}
+                        onChange={(e) => handleDanmakuMaxCountChange(parseInt(e.target.value))}
+                        className='flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700'
+                        style={{
+                          background: `linear-gradient(to right, #10b981 0%, #10b981 ${(danmakuMaxCount / 10000) * 100}%, #e5e7eb ${(danmakuMaxCount / 10000) * 100}%, #e5e7eb 100%)`
+                        }}
+                      />
+                    </div>
+                    <div className='relative text-xs text-gray-500 dark:text-gray-400' style={{ height: '24px' }}>
+                      <button
+                        onClick={() => handleDanmakuMaxCountChange(0)}
+                        className={`absolute px-2 py-0.5 rounded ${danmakuMaxCount === 0 ? 'bg-green-500 text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                        style={{ left: '0%', transform: 'translateX(0%)' }}
+                      >
+                        无上限
+                      </button>
+                      <button
+                        onClick={() => handleDanmakuMaxCountChange(3000)}
+                        className={`absolute px-2 py-0.5 rounded ${danmakuMaxCount === 3000 ? 'bg-green-500 text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                        style={{ left: '30%', transform: 'translateX(-50%)' }}
+                      >
+                        3000
+                      </button>
+                      <button
+                        onClick={() => handleDanmakuMaxCountChange(5000)}
+                        className={`absolute px-2 py-0.5 rounded ${danmakuMaxCount === 5000 ? 'bg-green-500 text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                        style={{ left: '50%', transform: 'translateX(-50%)' }}
+                      >
+                        5000
+                      </button>
+                      <button
+                        onClick={() => handleDanmakuMaxCountChange(10000)}
+                        className={`absolute px-2 py-0.5 rounded ${danmakuMaxCount === 10000 ? 'bg-green-500 text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                        style={{ left: '100%', transform: 'translateX(-100%)' }}
+                      >
+                        10000
+                      </button>
+                    </div>
+                    <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+                      限制加载的弹幕数量，减少性能消耗
+                    </p>
                   </div>
 
                   {/* 清除弹幕缓存 */}
